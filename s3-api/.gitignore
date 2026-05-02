@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 .env
+sam-installation/
+aws-sam-cli-linux-x86_64.zip
