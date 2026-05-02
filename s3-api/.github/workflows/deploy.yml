@@ -1,0 +1,115 @@
+name: Deploy SAM — s3-api
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION:     us-east-1
+  SAM_STACK_NAME: s3-api
+  SAM_S3_BUCKET:  ${{ secrets.SAM_DEPLOY_BUCKET }}
+
+jobs:
+
+  build:
+    name: Build & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - run: sam validate --lint
+      - run: sam build --use-container
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sam-build
+          path: .aws-sam/
+          retention-days: 1
+
+  deploy-dev:
+    name: Deploy → dev
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: sam-build
+          path: .aws-sam/
+      - name: Deploy a DEV
+        run: |
+          sam deploy \
+            --stack-name "${{ env.SAM_STACK_NAME }}-dev" \
+            --s3-bucket   "${{ env.SAM_S3_BUCKET }}" \
+            --s3-prefix   "${{ env.SAM_STACK_NAME }}/dev" \
+            --region      "${{ env.AWS_REGION }}" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --parameter-overrides Stage=dev \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+      - name: Mostrar URL
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name "${{ env.SAM_STACK_NAME }}-dev" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text
+
+  deploy-prod:
+    name: Deploy → prod
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: sam-build
+          path: .aws-sam/
+      - name: Deploy a PROD
+        run: |
+          sam deploy \
+            --stack-name "${{ env.SAM_STACK_NAME }}-prod" \
+            --s3-bucket   "${{ env.SAM_S3_BUCKET }}" \
+            --s3-prefix   "${{ env.SAM_STACK_NAME }}/prod" \
+            --region      "${{ env.AWS_REGION }}" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --parameter-overrides Stage=prod \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+      - name: Mostrar URL
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name "${{ env.SAM_STACK_NAME }}-prod" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text
