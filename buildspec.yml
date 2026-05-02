@@ -1,0 +1,42 @@
+version: 0.2
+
+env:
+  variables:
+    SAM_CLI_TELEMETRY: "0"
+
+phases:
+
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "=== Instalando SAM CLI ==="
+      - pip install aws-sam-cli --quiet
+      - sam --version
+
+  pre_build:
+    commands:
+      - echo "=== Validando template SAM ==="
+      - sam validate --lint
+
+  build:
+    commands:
+      - echo "=== Construyendo con SAM ==="
+      - sam build
+
+      - echo "=== Empaquetando para Deploy Dev ==="
+      - sam package --s3-bucket $ARTIFACTS_BUCKET --s3-prefix s3-api/dev --output-template-file packaged-dev.yaml
+
+      - echo "=== Empaquetando para Deploy Prod ==="
+      - sam package --s3-bucket $ARTIFACTS_BUCKET --s3-prefix s3-api/prod --output-template-file packaged-prod.yaml
+
+  post_build:
+    commands:
+      - echo "=== Build completado ==="
+
+artifacts:
+  files:
+    - packaged-dev.yaml
+    - packaged-prod.yaml
+    - template.yaml
+  discard-paths: no

@@ -1,0 +1,11 @@
+.aws-sam/
+__pycache__/
+*.pyc
+.env
+.env.*
+sam-installation/
+aws-sam-cli-linux-x86_64.zip
+awscliv2.zip
+aws/
+s3-api/sam-installation/
+s3-api/aws-sam-cli-linux-x86_64.zip
